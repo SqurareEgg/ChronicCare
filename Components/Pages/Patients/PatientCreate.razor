@@ -1,0 +1,112 @@
+@page "/patients/create"
+@rendermode InteractiveServer
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject PatientRepository PatientRepo
+
+<PageTitle>환자 등록 — ChronicCare</PageTitle>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="/patients" class="btn btn-sm btn-outline-secondary me-3"><i class="bi bi-arrow-left"></i></a>
+    <h4 class="mb-0"><i class="bi bi-person-plus-fill me-2"></i>신규 환자 등록</h4>
+</div>
+
+<div class="card shadow-sm" style="max-width:600px;">
+    <div class="card-body">
+        @if (!string.IsNullOrEmpty(_errorMsg))
+        {
+            <div class="alert alert-danger">@_errorMsg</div>
+        }
+        <EditForm Model="_patient" OnValidSubmit="HandleSubmit" FormName="patientCreateForm">
+            <DataAnnotationsValidator />
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">이름 <span class="text-danger">*</span></label>
+                    <InputText class="form-control" @bind-Value="_patient.Name" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">성별 <span class="text-danger">*</span></label>
+                    <InputSelect class="form-select" @bind-Value="_patient.Gender">
+                        <option value="M">남</option>
+                        <option value="F">여</option>
+                    </InputSelect>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">생년월일 <span class="text-danger">*</span></label>
+                    <InputDate class="form-control" @bind-Value="_patient.BirthDate" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">전화번호</label>
+                    <InputText class="form-control" @bind-Value="_patient.Phone" placeholder="010-0000-0000" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">질환 유형 <span class="text-danger">*</span></label>
+                    <InputSelect class="form-select" @bind-Value="_patient.DiseaseType">
+                        <option value="당뇨">당뇨</option>
+                        <option value="고혈압">고혈압</option>
+                        <option value="둘다">둘다</option>
+                    </InputSelect>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label fw-semibold">주소</label>
+                    <InputText class="form-control" @bind-Value="_patient.Address" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">담당 의사</label>
+                    <InputSelect class="form-select" @bind-Value="_patient.DoctorUserId">
+                        <option value="">— 선택 —</option>
+                        @foreach (var d in _doctors)
+                        {
+                            <option value="@d.UserId">@d.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary" disabled="@_saving">
+                    @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    저장
+                </button>
+                <a href="/patients" class="btn btn-outline-secondary">취소</a>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private PatientModel _patient = new() { BirthDate = DateTime.Today.AddYears(-50) };
+    private List<UserModel> _doctors = [];
+    private string _errorMsg = "";
+    private bool _saving = false;
+
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        _doctors = await PatientRepo.GetDoctorsAsync();
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (string.IsNullOrWhiteSpace(_patient.Name))
+        {
+            _errorMsg = "이름을 입력하세요.";
+            return;
+        }
+        _saving = true;
+        try
+        {
+            await PatientRepo.InsertAsync(_patient);
+            Nav.NavigateTo("/patients");
+        }
+        catch (Exception ex)
+        {
+            _errorMsg = "저장 실패: " + ex.Message;
+            _saving = false;
+        }
+    }
+}

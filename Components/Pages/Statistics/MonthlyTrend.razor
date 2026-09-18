@@ -1,0 +1,186 @@
+@page "/statistics/trend"
+@rendermode InteractiveServer
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject StatisticsRepository StatRepo
+@inject PatientRepository PatientRepo
+
+<PageTitle>월별 추이 — ChronicCare</PageTitle>
+
+<h4 class="mb-3"><i class="bi bi-graph-up me-2"></i>기간별(월별) 측정 추이</h4>
+
+<div class="row g-2 mb-3 align-items-end">
+    <div class="col-md-4">
+        <label class="form-label small fw-semibold">환자 선택 (전체 또는 개별)</label>
+        <select class="form-select form-select-sm" @onchange="OnPatientChange">
+            <option value="0">전체 환자 평균</option>
+            @foreach (var p in _patients)
+            {
+                <option value="@p.PatientId">@p.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary btn-sm w-100" @onclick="LoadData">조회</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    @if (_data.Count == 0)
+    {
+        <div class="alert alert-info">해당 기간의 측정 데이터가 없습니다.</div>
+    }
+    else
+    {
+        <!-- 추이 테이블 -->
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">
+                월별 평균 측정치
+                @if (_selectedPatientId > 0)
+                {
+                    <span class="text-muted ms-2 small">— @_patients.FirstOrDefault(p => p.PatientId == _selectedPatientId)?.Name 환자</span>
+                }
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-dark text-center">
+                        <tr>
+                            <th>연월</th>
+                            <th>평균 혈당 (mg/dL)</th>
+                            <th>혈당 위험도</th>
+                            <th>평균 수축기 (mmHg)</th>
+                            <th>수축기 위험도</th>
+                            <th>평균 이완기 (mmHg)</th>
+                            <th>측정 건수</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _data)
+                        {
+                            var gClass = row.AvgGlucose >= 126 ? "table-danger"
+                                       : row.AvgGlucose >= 100 ? "table-warning" : "";
+                            var sClass = row.AvgSystolic >= 140 ? "table-danger"
+                                       : row.AvgSystolic >= 120 ? "table-warning" : "";
+                            <tr>
+                                <td class="fw-semibold text-center">@row.YearMonth</td>
+                                <td class="text-center @gClass">
+                                    @(row.AvgGlucose.HasValue ? row.AvgGlucose.Value.ToString("F1") : "-")
+                                </td>
+                                <td class="text-center">
+                                    @if (row.AvgGlucose.HasValue)
+                                    {
+                                        var gl = (int)row.AvgGlucose.Value;
+                                        var (_, lvl) = RiskCalculator.Calculate(gl, null, null);
+                                        <span class="badge @RiskCalculator.RiskBadgeClass(lvl)">@lvl</span>
+                                    }
+                                </td>
+                                <td class="text-center @sClass">
+                                    @(row.AvgSystolic.HasValue ? row.AvgSystolic.Value.ToString("F1") : "-")
+                                </td>
+                                <td class="text-center">
+                                    @if (row.AvgSystolic.HasValue)
+                                    {
+                                        var sys = (int)row.AvgSystolic.Value;
+                                        var (_, lvl) = RiskCalculator.Calculate(null, sys, null);
+                                        <span class="badge @RiskCalculator.RiskBadgeClass(lvl)">@lvl</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    @(row.AvgDiastolic.HasValue ? row.AvgDiastolic.Value.ToString("F1") : "-")
+                                </td>
+                                <td class="text-center">@(row.MeasureCnt)건</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 텍스트 기반 추이 차트 -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header fw-semibold">혈당 월별 추이 (텍스트 차트)</div>
+            <div class="card-body">
+                @{
+                    double maxG = _data.Where(d => d.AvgGlucose.HasValue).Select(d => d.AvgGlucose!.Value).DefaultIfEmpty(1).Max();
+                }
+                @foreach (var row in _data)
+                {
+                    var barW = row.AvgGlucose.HasValue ? (int)(row.AvgGlucose.Value / maxG * 100) : 0;
+                    var barClass = row.AvgGlucose >= 126 ? "bg-danger" : row.AvgGlucose >= 100 ? "bg-warning" : "bg-success";
+                    <div class="d-flex align-items-center mb-1">
+                        <div style="width:70px;" class="text-muted small">@row.YearMonth</div>
+                        <div class="flex-grow-1 me-2">
+                            <div class="progress" style="height:18px;">
+                                <div class="progress-bar @barClass" style="width:@barW%">
+                                    @(row.AvgGlucose.HasValue ? row.AvgGlucose.Value.ToString("F0") : "-")
+                                </div>
+                            </div>
+                        </div>
+                        <div style="width:50px;" class="text-muted small text-end">mg/dL</div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+            <div class="card-header fw-semibold">수축기 혈압 월별 추이 (텍스트 차트)</div>
+            <div class="card-body">
+                @{
+                    double maxS = _data.Where(d => d.AvgSystolic.HasValue).Select(d => d.AvgSystolic!.Value).DefaultIfEmpty(1).Max();
+                }
+                @foreach (var row in _data)
+                {
+                    var barW = row.AvgSystolic.HasValue ? (int)(row.AvgSystolic.Value / maxS * 100) : 0;
+                    var barClass = row.AvgSystolic >= 140 ? "bg-danger" : row.AvgSystolic >= 120 ? "bg-warning" : "bg-success";
+                    <div class="d-flex align-items-center mb-1">
+                        <div style="width:70px;" class="text-muted small">@row.YearMonth</div>
+                        <div class="flex-grow-1 me-2">
+                            <div class="progress" style="height:18px;">
+                                <div class="progress-bar @barClass" style="width:@barW%">
+                                    @(row.AvgSystolic.HasValue ? row.AvgSystolic.Value.ToString("F0") : "-")
+                                </div>
+                            </div>
+                        </div>
+                        <div style="width:50px;" class="text-muted small text-end">mmHg</div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private List<PatientModel> _patients = [];
+    private List<MonthlyTrendItem> _data = [];
+    private int _selectedPatientId = 0;
+
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        _patients = await PatientRepo.GetAllAsync();
+        await LoadData();
+    }
+
+    private void OnPatientChange(ChangeEventArgs e)
+    {
+        _selectedPatientId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _data = await StatRepo.GetMonthlyTrendAsync(_selectedPatientId == 0 ? null : _selectedPatientId);
+        _loading = false;
+    }
+}

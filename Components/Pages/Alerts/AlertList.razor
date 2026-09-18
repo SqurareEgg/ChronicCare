@@ -1,0 +1,146 @@
+@page "/alerts"
+@rendermode InteractiveServer
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject AlertRepository AlertRepo
+
+<PageTitle>알림 관리 — ChronicCare</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-bell-fill me-2 text-danger"></i>알림 관리</h4>
+    <select class="form-select form-select-sm" style="width:140px;" @onchange="OnStatusFilter">
+        <option value="">전체</option>
+        <option value="미확인">미확인</option>
+        <option value="확인">확인</option>
+        <option value="처리완료">처리완료</option>
+    </select>
+</div>
+
+@if (!string.IsNullOrEmpty(_msg))
+{
+    <div class="alert alert-success alert-dismissible">@_msg
+        <button type="button" class="btn-close" @onclick="ClearMsg"></button>
+    </div>
+}
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5"><div class="spinner-border text-danger"></div></div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th><th>환자명</th><th>위험등급</th><th>알림 내용</th>
+                        <th>발생일시</th><th>상태</th><th>처리자</th><th>처리일시</th><th>관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_alerts.Count == 0)
+                    {
+                        <tr><td colspan="9" class="text-center text-muted py-4">알림이 없습니다.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var a in _alerts)
+                        {
+                            var rowClass = a.Status == "미확인" ? "table-danger" : a.Status == "확인" ? "table-warning" : "";
+                            var statusBadge = a.Status == "미확인" ? "bg-danger" : a.Status == "확인" ? "bg-warning text-dark" : "bg-success";
+                            <tr class="@rowClass">
+                                <td>@a.AlertId</td>
+                                <td class="fw-semibold">@a.PatientName</td>
+                                <td><span class="badge @RiskCalculator.RiskBadgeClass(a.RiskLevel)">@a.RiskLevel</span></td>
+                                <td><small>@a.AlertMessage</small></td>
+                                <td><small>@a.AlertDate.ToString("yyyy-MM-dd HH:mm")</small></td>
+                                <td><span class="badge @statusBadge">@a.Status</span></td>
+                                <td>@a.CheckedByName</td>
+                                <td><small>@(a.CheckedDate.HasValue ? a.CheckedDate.Value.ToString("MM-dd HH:mm") : "-")</small></td>
+                                <td>@RenderAction(a)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer text-muted small">
+            총 @(_alerts.Count)건
+            (미확인: @(_alerts.Count(a => a.Status == "미확인")),
+            확인: @(_alerts.Count(a => a.Status == "확인")),
+            처리완료: @(_alerts.Count(a => a.Status == "처리완료")))
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string _msg = "";
+    private List<AlertModel> _alerts = [];
+    private string? _statusFilter = null;
+
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _alerts = await AlertRepo.GetAllAsync(_statusFilter);
+        _loading = false;
+    }
+
+    private async Task OnStatusFilter(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        _statusFilter = string.IsNullOrEmpty(val) ? null : val;
+        await LoadAsync();
+    }
+
+    private void ClearMsg() => _msg = "";
+
+    private async Task UpdateStatus(AlertModel a, string newStatus)
+    {
+        await AlertRepo.UpdateStatusAsync(a.AlertId, newStatus, Auth.CurrentUser!.UserId);
+        _msg = $"알림 #{a.AlertId} 상태가 '{newStatus}'로 변경되었습니다.";
+        await LoadAsync();
+    }
+
+    private async Task MarkConfirmed(AlertModel a) => await UpdateStatus(a, "확인");
+    private async Task MarkDone(AlertModel a) => await UpdateStatus(a, "처리완료");
+
+    private RenderFragment RenderAction(AlertModel a) => builder =>
+    {
+        if (a.Status == "미확인")
+        {
+            builder.OpenElement(0, "button");
+            builder.AddAttribute(1, "class", "btn btn-sm btn-warning");
+            builder.AddAttribute(2, "onclick", EventCallback.Factory.Create(this, () => MarkConfirmed(a)));
+            builder.AddContent(3, "확인");
+            builder.CloseElement();
+        }
+        else if (a.Status == "확인")
+        {
+            builder.OpenElement(0, "button");
+            builder.AddAttribute(1, "class", "btn btn-sm btn-success");
+            builder.AddAttribute(2, "onclick", EventCallback.Factory.Create(this, () => MarkDone(a)));
+            builder.AddContent(3, "처리완료");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(0, "span");
+            builder.AddAttribute(1, "class", "text-muted small");
+            builder.AddContent(2, "완료");
+            builder.CloseElement();
+        }
+    };
+}

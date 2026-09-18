@@ -1,0 +1,122 @@
+@page "/patients/edit/{PatientId:int}"
+@rendermode InteractiveServer
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject PatientRepository PatientRepo
+
+<PageTitle>환자 수정 — ChronicCare</PageTitle>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="/patients" class="btn btn-sm btn-outline-secondary me-3"><i class="bi bi-arrow-left"></i></a>
+    <h4 class="mb-0"><i class="bi bi-pencil-fill me-2"></i>환자 정보 수정</h4>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else if (_patient == null)
+{
+    <div class="alert alert-warning">환자 정보를 찾을 수 없습니다.</div>
+}
+else
+{
+    <div class="card shadow-sm" style="max-width:600px;">
+        <div class="card-body">
+            @if (!string.IsNullOrEmpty(_errorMsg))
+            {
+                <div class="alert alert-danger">@_errorMsg</div>
+            }
+            <EditForm Model="_patient" OnValidSubmit="HandleSubmit" FormName="patientEditForm">
+                <DataAnnotationsValidator />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">이름</label>
+                        <InputText class="form-control" @bind-Value="_patient.Name" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">성별</label>
+                        <InputSelect class="form-select" @bind-Value="_patient.Gender">
+                            <option value="M">남</option>
+                            <option value="F">여</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">생년월일</label>
+                        <InputDate class="form-control" @bind-Value="_patient.BirthDate" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">전화번호</label>
+                        <InputText class="form-control" @bind-Value="_patient.Phone" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">질환 유형</label>
+                        <InputSelect class="form-select" @bind-Value="_patient.DiseaseType">
+                            <option value="당뇨">당뇨</option>
+                            <option value="고혈압">고혈압</option>
+                            <option value="둘다">둘다</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">주소</label>
+                        <InputText class="form-control" @bind-Value="_patient.Address" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">담당 의사</label>
+                        <InputSelect class="form-select" @bind-Value="_patient.DoctorUserId">
+                            <option value="">— 선택 —</option>
+                            @foreach (var d in _doctors)
+                            {
+                                <option value="@d.UserId">@d.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@_saving">
+                        @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        저장
+                    </button>
+                    <a href="/patients" class="btn btn-outline-secondary">취소</a>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int PatientId { get; set; }
+    private PatientModel? _patient;
+    private List<UserModel> _doctors = [];
+    private string _errorMsg = "";
+    private bool _loading = true;
+    private bool _saving = false;
+
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        _patient = await PatientRepo.GetByIdAsync(PatientId);
+        _doctors = await PatientRepo.GetDoctorsAsync();
+        _loading = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        _saving = true;
+        try
+        {
+            await PatientRepo.UpdateAsync(_patient!);
+            Nav.NavigateTo("/patients");
+        }
+        catch (Exception ex)
+        {
+            _errorMsg = "저장 실패: " + ex.Message;
+            _saving = false;
+        }
+    }
+}

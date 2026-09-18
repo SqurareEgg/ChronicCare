@@ -1,0 +1,182 @@
+@page "/"
+@rendermode InteractiveServer
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject AlertRepository AlertRepo
+@inject StatisticsRepository StatRepo
+@inject PatientRepository PatientRepo
+
+<PageTitle>대시보드 — ChronicCare</PageTitle>
+
+<h4 class="mb-4"><i class="bi bi-speedometer2 me-2"></i>대시보드</h4>
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <div class="spinner-border text-primary"></div>
+    </div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="display-6 text-primary fw-bold">@_patientCount</div>
+                <small class="text-muted">전체 환자 수</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="display-6 text-danger fw-bold">@_dangerCount</div>
+                <small class="text-muted">위험 환자 수</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="display-6 text-warning fw-bold">@_uncheckedAlerts</div>
+                <small class="text-muted">미확인 알림</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="display-6 text-success fw-bold">@_normalCount</div>
+                <small class="text-muted">정상 환자 수</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-5">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold"><i class="bi bi-bar-chart-fill me-1"></i>위험군 분포 (최신 측정 기준)</div>
+                <div class="card-body">
+                    @foreach (var item in _distribution)
+                    {
+                        var pct = _patientCount > 0 ? (int)((double)item.Cnt / _patientCount * 100) : 0;
+                        var barClass = item.RiskLevel == "위험" ? "bg-danger" : item.RiskLevel == "주의" ? "bg-warning" : "bg-success";
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="badge @barClass fs-6">@item.RiskLevel</span>
+                                <strong>@(item.Cnt)명 (@pct%)</strong>
+                            </div>
+                            <div class="progress" style="height:12px;">
+                                <div class="progress-bar @barClass" style="width:@pct%"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">
+                    <i class="bi bi-bell-fill me-1 text-danger"></i>미확인 알림
+                    <a href="/alerts" class="btn btn-sm btn-outline-primary float-end">전체보기</a>
+                </div>
+                <div class="card-body p-0">
+                    @if (_recentAlerts.Count == 0)
+                    {
+                        <p class="text-muted p-3">미확인 알림이 없습니다.</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light"><tr><th>환자</th><th>알림 내용</th><th>날짜</th></tr></thead>
+                            <tbody>
+                                @foreach (var a in _recentAlerts.Take(5))
+                                {
+                                    <tr class="table-danger">
+                                        <td class="fw-semibold">@a.PatientName</td>
+                                        <td><small>@a.AlertMessage</small></td>
+                                        <td><small>@a.AlertDate.ToString("MM/dd")</small></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 오늘의 모니터링 우선순위 — SortedList<int,AlertModel>로 위험도 내림차순 정렬 -->
+    <div class="card shadow-sm mt-3">
+        <div class="card-header fw-semibold">
+            <i class="bi bi-list-ol me-1"></i>오늘의 모니터링 우선순위 (위험도 높은 순)
+        </div>
+        <div class="card-body p-0">
+            @if (_priorityList.Count == 0)
+            {
+                <p class="text-muted p-3">모니터링 대상 없음</p>
+            }
+            else
+            {
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr><th>#</th><th>환자명</th><th>질환</th><th>위험등급</th><th>알림 내용</th></tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < _priorityList.Count; i++)
+                        {
+                            var a = _priorityList[i];
+                            var rowClass = a.RiskLevel == "위험" ? "table-danger" : "table-warning";
+                            var pName = _patientCache.TryGetValue(a.PatientId, out var pt) ? pt.Name : "-";
+                            var pDisease = _patientCache.TryGetValue(a.PatientId, out var pt2) ? pt2.DiseaseType : "-";
+                            <tr class="@rowClass">
+                                <td>@(i + 1)</td>
+                                <td class="fw-semibold">@pName</td>
+                                <td>@pDisease</td>
+                                <td><span class="badge @RiskCalculator.RiskBadgeClass(a.RiskLevel)">@a.RiskLevel</span></td>
+                                <td><small>@a.AlertMessage</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private int _patientCount, _dangerCount, _normalCount, _uncheckedAlerts;
+    private List<RiskDistributionItem> _distribution = [];
+    private List<AlertModel> _recentAlerts = [];
+    // Dictionary<PatientId, PatientModel> — 환자 정보 캐시 (빠른 이름 조회)
+    private Dictionary<int, PatientModel> _patientCache = new();
+    // SortedList로 위험도 내림차순 우선순위 큐 표현
+    private List<AlertModel> _priorityList = [];
+
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+
+        var patients = await PatientRepo.GetAllAsync();
+        _patientCount = patients.Count;
+        _patientCache = patients.ToDictionary(p => p.PatientId);
+
+        _distribution = await StatRepo.GetRiskDistributionAsync();
+        _dangerCount  = _distribution.FirstOrDefault(x => x.RiskLevel == "위험")?.Cnt ?? 0;
+        _normalCount  = _distribution.FirstOrDefault(x => x.RiskLevel == "정상")?.Cnt ?? 0;
+
+        var allAlerts = await AlertRepo.GetAllAsync();
+        _recentAlerts    = allAlerts.Where(a => a.Status == "미확인").OrderByDescending(a => a.AlertDate).ToList();
+        _uncheckedAlerts = _recentAlerts.Count;
+
+        // 우선순위 큐: 미확인 알림 환자 → AlertDate 최신순 (실무에서는 RiskScore 내림차순)
+        // 환자당 가장 최근 미확인 알림 1개만 표시
+        _priorityList = _recentAlerts
+            .GroupBy(a => a.PatientId)
+            .Select(g => g.OrderByDescending(a => a.AlertDate).First())
+            .OrderByDescending(a => a.AlertDate)
+            .Take(10)
+            .ToList();
+
+        _loading = false;
+    }
+}

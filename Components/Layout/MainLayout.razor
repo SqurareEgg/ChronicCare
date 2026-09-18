@@ -1,0 +1,49 @@
+@inherits LayoutComponentBase
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@if (!Auth.IsAuthenticated)
+{
+    @Body
+}
+else
+{
+    <div class="page">
+        <div class="sidebar">
+            <NavMenu />
+        </div>
+
+        <main>
+            <div class="top-row px-4 d-flex justify-content-between align-items-center">
+                <span class="text-muted small">
+                    <i class="bi bi-person-circle"></i>
+                    @Auth.CurrentUser!.Name (@Auth.CurrentUser.Role)
+                </span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="Logout">로그아웃</button>
+            </div>
+            <article class="content px-4">
+                @Body
+            </article>
+        </main>
+    </div>
+}
+
+<div id="blazor-error-ui" data-nosnippet>
+    오류가 발생했습니다.
+    <a href="." class="reload">새로고침</a>
+    <span class="dismiss">✕</span>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsAuthenticated && !Nav.Uri.Contains("/login"))
+            Nav.NavigateTo("/login");
+    }
+
+    private void Logout()
+    {
+        Auth.Logout();
+        Nav.NavigateTo("/login");
+    }
+}

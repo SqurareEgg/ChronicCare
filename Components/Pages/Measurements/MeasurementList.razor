@@ -1,0 +1,150 @@
+@page "/measurements"
+@rendermode InteractiveServer
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject MeasurementRepository MeasRepo
+@inject PatientRepository PatientRepo
+
+<PageTitle>측정 기록 — ChronicCare</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-clipboard2-pulse-fill me-2"></i>측정 기록 목록</h4>
+    <a href="/measurements/create" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle-fill me-1"></i>측정 등록
+    </a>
+</div>
+
+@if (!string.IsNullOrEmpty(_msg))
+{
+    <div class="alert alert-success alert-dismissible">@_msg
+        <button type="button" class="btn-close" @onclick='() => _msg = ""'></button>
+    </div>
+}
+
+<div class="row g-2 mb-3">
+    <div class="col-md-4">
+        <select class="form-select form-select-sm" @onchange="OnPatientFilter">
+            <option value="0">전체 환자</option>
+            @foreach (var p in _patients)
+            {
+                <option value="@p.PatientId">@p.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select form-select-sm" @onchange="OnRiskFilter">
+            <option value="">전체 위험도</option>
+            <option value="위험">위험</option>
+            <option value="주의">주의</option>
+            <option value="정상">정상</option>
+        </select>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th><th>환자명</th><th>측정일시</th><th>유형</th>
+                        <th>혈당(mg/dL)</th><th>수축기</th><th>이완기</th><th>맥박</th>
+                        <th>위험점수</th><th>위험등급</th><th>관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_filtered.Count == 0)
+                    {
+                        <tr><td colspan="11" class="text-center text-muted py-4">측정기록이 없습니다.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var m in _filtered)
+                        {
+                            <tr class="@RiskCalculator.RiskRowClass(m.RiskLevel)">
+                                <td>@m.MeasurementId</td>
+                                <td class="fw-semibold">@m.PatientName</td>
+                                <td>@m.MeasureDate.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@m.MeasureType</td>
+                                <td>@(m.GlucoseLevel.HasValue ? $"{m.GlucoseLevel}" : "-")</td>
+                                <td>@(m.SystolicBP.HasValue  ? $"{m.SystolicBP}"  : "-")</td>
+                                <td>@(m.DiastolicBP.HasValue ? $"{m.DiastolicBP}" : "-")</td>
+                                <td>@(m.HeartRate.HasValue   ? $"{m.HeartRate}"   : "-")</td>
+                                <td class="fw-bold">@(m.RiskScore)점</td>
+                                <td><span class="badge @RiskCalculator.RiskBadgeClass(m.RiskLevel)">@m.RiskLevel</span></td>
+                                <td>
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            @onclick="() => DeleteMeasurement(m)">삭제</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer text-muted small">총 @(_filtered.Count)건 (전체 @(_all.Count)건)</div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string _msg = "";
+    private List<MeasurementModel> _all = [];
+    private List<MeasurementModel> _filtered = [];
+    private List<PatientModel> _patients = [];
+    private int _patientFilter = 0;
+    private string _riskFilter = "";
+
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        _patients = await PatientRepo.GetAllAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _all = _patientFilter > 0
+            ? await MeasRepo.GetByPatientAsync(_patientFilter)
+            : await MeasRepo.GetAllAsync();
+        ApplyFilter();
+        _loading = false;
+    }
+
+    private async Task OnPatientFilter(ChangeEventArgs e)
+    {
+        _patientFilter = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        await LoadAsync();
+    }
+
+    private void OnRiskFilter(ChangeEventArgs e)
+    {
+        _riskFilter = e.Value?.ToString() ?? "";
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = string.IsNullOrEmpty(_riskFilter)
+            ? _all.ToList()
+            : _all.Where(m => m.RiskLevel == _riskFilter).ToList();
+    }
+
+    private async Task DeleteMeasurement(MeasurementModel m)
+    {
+        await MeasRepo.DeleteAsync(m.MeasurementId);
+        _msg = $"측정기록 #{m.MeasurementId}이 삭제되었습니다.";
+        await LoadAsync();
+    }
+}

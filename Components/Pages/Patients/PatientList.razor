@@ -1,0 +1,142 @@
+@page "/patients"
+@rendermode InteractiveServer
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject PatientRepository PatientRepo
+
+<PageTitle>환자 관리 — ChronicCare</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-people-fill me-2"></i>환자 목록</h4>
+    <a href="/patients/create" class="btn btn-primary btn-sm">
+        <i class="bi bi-person-plus-fill me-1"></i>신규 환자 등록
+    </a>
+</div>
+
+@if (!string.IsNullOrEmpty(_msg))
+{
+    <div class="alert alert-success alert-dismissible">@_msg
+        <button type="button" class="btn-close" @onclick='() => _msg = ""'></button>
+    </div>
+}
+
+<!-- 검색 필터 -->
+<div class="row g-2 mb-3">
+    <div class="col-md-4">
+        <input class="form-control form-control-sm" placeholder="이름 검색..." @oninput="OnSearch" />
+    </div>
+    <div class="col-md-3">
+        <select class="form-select form-select-sm" @onchange="OnDiseaseFilter">
+            <option value="">전체 질환</option>
+            <option value="당뇨">당뇨</option>
+            <option value="고혈압">고혈압</option>
+            <option value="둘다">둘다</option>
+        </select>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th><th>이름</th><th>성별</th><th>나이</th>
+                        <th>질환</th><th>전화번호</th><th>담당의</th><th>등록일</th><th>관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_filtered.Count == 0)
+                    {
+                        <tr><td colspan="9" class="text-center text-muted py-4">환자가 없습니다.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var p in _filtered)
+                        {
+                            var diseaseClass = p.DiseaseType == "둘다" ? "badge bg-purple text-white"
+                                             : p.DiseaseType == "당뇨"  ? "badge bg-info text-dark"
+                                             : "badge bg-secondary";
+                            <tr>
+                                <td>@p.PatientId</td>
+                                <td class="fw-semibold">@p.Name</td>
+                                <td>@(p.Gender == "M" ? "남" : "여")</td>
+                                <td>@(p.Age)세</td>
+                                <td><span class="badge bg-secondary">@p.DiseaseType</span></td>
+                                <td>@p.Phone</td>
+                                <td>@p.DoctorName</td>
+                                <td>@p.RegisteredDate.ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    <a href="/patients/edit/@p.PatientId" class="btn btn-xs btn-outline-primary btn-sm me-1">수정</a>
+                                    <button class="btn btn-xs btn-outline-danger btn-sm"
+                                            @onclick="() => DeletePatient(p)">삭제</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer text-muted small">총 @(_filtered.Count)명 (전체 @(_all.Count)명)</div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string _msg = "";
+    private List<PatientModel> _all = [];
+    private List<PatientModel> _filtered = [];
+    private string _searchName = "";
+    private string _diseaseFilter = "";
+
+    protected override void OnInitialized()
+    {
+        if (!Auth.IsAuthenticated) Nav.NavigateTo("/login");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _all = await PatientRepo.GetAllAsync();
+        ApplyFilter();
+        _loading = false;
+    }
+
+    private void OnSearch(ChangeEventArgs e)
+    {
+        _searchName = e.Value?.ToString() ?? "";
+        ApplyFilter();
+    }
+
+    private void OnDiseaseFilter(ChangeEventArgs e)
+    {
+        _diseaseFilter = e.Value?.ToString() ?? "";
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = _all.Where(p =>
+            (string.IsNullOrEmpty(_searchName) || p.Name.Contains(_searchName)) &&
+            (string.IsNullOrEmpty(_diseaseFilter) || p.DiseaseType == _diseaseFilter)
+        ).ToList();
+    }
+
+    private async Task DeletePatient(PatientModel p)
+    {
+        await PatientRepo.DeleteAsync(p.PatientId);
+        _msg = $"{p.Name} 환자가 삭제되었습니다.";
+        await LoadAsync();
+    }
+}
