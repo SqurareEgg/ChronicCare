@@ -41,4 +41,24 @@ dotnet run
 
 ## 발표자료
 
-`docs/만성질환_모니터링_시스템_기말과제.pptx` (생성 스크립트: `docs/make_ppt.py`)
+<img width="1280" height="720" alt="슬라이드1" src="https://github.com/user-attachments/assets/c6362797-d718-4913-a63e-04be58f06c1d" />
+
+<img width="1280" height="720" alt="슬라이드2" src="https://github.com/user-attachments/assets/4ac6cec2-8971-4527-b605-7202abee5b3a" />
+
+<img width="1280" height="720" alt="슬라이드3" src="https://github.com/user-attachments/assets/944acac2-c51b-4c59-96d2-79efa1927560" />
+
+<img width="1280" height="720" alt="슬라이드4" src="https://github.com/user-attachments/assets/32cc56c1-c559-4ef7-b8ce-6e4c4463e765" />
+
+<img width="1280" height="720" alt="슬라이드5" src="https://github.com/user-attachments/assets/3f16e652-c0dd-4556-805a-2a9f99383d28" />
+
+<img width="1280" height="720" alt="슬라이드6" src="https://github.com/user-attachments/assets/209701d8-ca00-4b69-9f5b-01520cc069c6" />
+
+<img width="1280" height="720" alt="슬라이드7" src="https://github.com/user-attachments/assets/075d34db-d828-48ce-9374-ecfdc7aeac5f" />
+
+<img width="1280" height="720" alt="슬라이드8" src="https://github.com/user-attachments/assets/98632abc-6ad3-44e5-b676-f004ed28a480" />
+
+<img width="1280" height="720" alt="슬라이드9" src="https://github.com/user-attachments/assets/441041c4-c21c-4780-a15d-9b97d87d27df" />
+
+<img width="1280" height="720" alt="슬라이드10" src="https://github.com/user-attachments/assets/f7292663-aaf0-43b5-9c69-f21104bd8deb" />
+
+<img width="1280" height="720" alt="슬라이드11" src="https://github.com/user-attachments/assets/6f5c310c-b037-43fa-9773-d870fedecc0c" />
